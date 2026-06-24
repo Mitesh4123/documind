@@ -24,6 +24,18 @@ export default function Dashboard() {
     fetchDocuments();
   }, [fetchDocuments]);
 
+  // Poll every 4s while any document is still being processed/embedded,
+  // so status badges update without a manual refresh.
+  useEffect(() => {
+    const hasPending = documents.some(
+      (d) => d.status === "processing" || ["pending", "processing"].includes(d.embeddingStatus)
+    );
+    if (!hasPending) return;
+
+    const interval = setInterval(fetchDocuments, 4000);
+    return () => clearInterval(interval);
+  }, [documents, fetchDocuments]);
+
   async function handleDelete(id) {
     try {
       await api.delete(`/documents/${id}`);
