@@ -54,3 +54,7 @@ App runs on http://localhost:5173
 - Store vectors in a vector DB (Qdrant/Chroma/Pinecone)
 - Build a `/api/documents/:id/ask` endpoint that retrieves relevant chunks and asks the LLM with citation-aware prompting
 - Wire up a chat UI in the frontend
+
+
+
+developing by Mitesh Thummar
