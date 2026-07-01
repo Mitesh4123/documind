@@ -10,6 +10,7 @@ const chatMessageSchema = new mongoose.Schema(
       {
         label: String,
         chunkIndex: Number,
+        pageNumber: Number,
         text: String,
         score: Number,
       },

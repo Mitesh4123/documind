@@ -16,6 +16,7 @@ export async function upsertChunks(documentId, chunks, embeddings) {
       documentId,
       chunkIndex: chunk.index,
       text: chunk.text,
+      pageNumber: chunk.pageNumber || 0,
     },
   }));
 
@@ -41,6 +42,7 @@ export async function queryChunks(documentId, queryEmbedding, topK = 5) {
   return result.matches.map((match) => ({
     text: match.metadata.text,
     chunkIndex: match.metadata.chunkIndex,
+    pageNumber: match.metadata.pageNumber || 0,
     score: match.score,
   }));
 }

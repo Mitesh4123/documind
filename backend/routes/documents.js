@@ -7,7 +7,7 @@ import Document from "../models/Document.js";
 import ChatMessage from "../models/ChatMessage.js";
 import authMiddleware from "../middleware/auth.js";
 import { extractTextFromPdf } from "../utils/pdfExtract.js";
-import { chunkText } from "../utils/chunkText.js";
+import { chunkPages } from "../utils/chunkText.js";
 import { embedText, embedTextBatch } from "../utils/embeddings.js";
 import { upsertChunks, queryChunks, deleteDocumentVectors } from "../utils/pinecone.js";
 import { askWithContext, summarizeDocument } from "../utils/gemini.js";
@@ -48,7 +48,7 @@ async function processEmbeddings(doc) {
     doc.embeddingStatus = "processing";
     await doc.save();
 
-    const chunks = chunkText(doc.extractedText);
+    const chunks = chunkPages(doc.pages && doc.pages.length > 0 ? doc.pages : [doc.extractedText]);
 
     if (chunks.length === 0) {
       doc.embeddingStatus = "failed";
@@ -91,9 +91,10 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     // Extract text synchronously so we know page count before responding
     try {
-      const { text, pageCount } = await extractTextFromPdf(req.file.path);
+      const { text, pageCount, pages } = await extractTextFromPdf(req.file.path);
       doc.extractedText = text;
       doc.pageCount = pageCount;
+      doc.pages = pages;
       doc.status = "ready";
       await doc.save();
 
@@ -129,6 +130,24 @@ router.get("/", async (req, res) => {
       .sort({ createdAt: -1 });
 
     res.json({ documents: docs });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// Serve the raw PDF file for in-browser viewing (auth-protected, unlike /uploads static serving)
+router.get("/:id/file", async (req, res) => {
+  try {
+    const doc = await Document.findOne({ _id: req.params.id, owner: req.userId });
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    if (!fs.existsSync(doc.filePath)) {
+      return res.status(404).json({ message: "File no longer exists on server" });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${doc.originalName}"`);
+    fs.createReadStream(doc.filePath).pipe(res);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }

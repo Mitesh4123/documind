@@ -9,7 +9,8 @@ const documentSchema = new mongoose.Schema(
     mimeType: { type: String },
     sizeBytes: { type: Number },
     pageCount: { type: Number, default: 0 },
-    extractedText: { type: String, default: "" }, // full text, used in Phase 2 for chunking
+    extractedText: { type: String, default: "" }, // full text, used for summaries
+    pages: { type: [String], default: [] }, // per-page text, index 0 = page 1; used for page-aware chunking
     status: {
       type: String,
       enum: ["uploaded", "processing", "ready", "failed"],
