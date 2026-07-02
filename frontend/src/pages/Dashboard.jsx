@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client.js";
 import UploadBox from "../components/UploadBox.jsx";
 import DocumentList from "../components/DocumentList.jsx";
+import MultiDocSearch from "../components/MultiDocSearch.jsx";
 
 export default function Dashboard() {
   const [documents, setDocuments] = useState([]);
@@ -64,7 +65,12 @@ export default function Dashboard() {
       {loading ? (
         <p className="text-gray-500 text-center mt-8">Loading documents...</p>
       ) : (
-        <DocumentList documents={documents} onDelete={handleDelete} />
+        <>
+          <DocumentList documents={documents} onDelete={handleDelete} />
+          {documents.some((d) => d.embeddingStatus === "ready") && (
+            <MultiDocSearch />
+          )}
+        </>
       )}
     </div>
   );

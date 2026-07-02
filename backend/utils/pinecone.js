@@ -48,6 +48,42 @@ export async function queryChunks(documentId, queryEmbedding, topK = 5) {
 }
 
 /**
+ * Queries multiple document namespaces in parallel and merges results.
+ * Each document contributes up to topKPerDoc chunks; results are merged
+ * and re-sorted by score so the best chunks across all docs bubble up.
+ *
+ * @param {Array<{id: string, name: string}>} documents - docs to search
+ * @param {number[]} queryEmbedding - embedded question vector
+ * @param {number} topKPerDoc - chunks to retrieve per document
+ * @param {number} totalTopK - max chunks to return after merging
+ */
+export async function queryChunksAcrossDocuments(
+  documents,
+  queryEmbedding,
+  topKPerDoc = 3,
+  totalTopK = 8
+) {
+  const results = await Promise.allSettled(
+    documents.map(async (doc) => {
+      const matches = await queryChunks(doc.id, queryEmbedding, topKPerDoc);
+      return matches.map((chunk) => ({
+        ...chunk,
+        documentId: doc.id,
+        documentName: doc.name,
+      }));
+    })
+  );
+
+  const allChunks = results
+    .filter((r) => r.status === "fulfilled")
+    .flatMap((r) => r.value);
+
+  // Re-rank by score descending and cap at totalTopK
+  allChunks.sort((a, b) => b.score - a.score);
+  return allChunks.slice(0, totalTopK);
+}
+
+/**
  * Deletes all vectors belonging to a document (its entire namespace).
  * If the namespace never existed (e.g. embedding step failed before any
  * vectors were created), Pinecone returns a 404 — that's expected and fine,

@@ -9,7 +9,7 @@ import authMiddleware from "../middleware/auth.js";
 import { extractTextFromPdf } from "../utils/pdfExtract.js";
 import { chunkPages } from "../utils/chunkText.js";
 import { embedText, embedTextBatch } from "../utils/embeddings.js";
-import { upsertChunks, queryChunks, deleteDocumentVectors } from "../utils/pinecone.js";
+import { upsertChunks, queryChunks, queryChunksAcrossDocuments, deleteDocumentVectors } from "../utils/pinecone.js";
 import { askWithContext, summarizeDocument } from "../utils/gemini.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,6 +51,10 @@ async function processEmbeddings(doc) {
     const chunks = chunkPages(doc.pages && doc.pages.length > 0 ? doc.pages : [doc.extractedText]);
 
     if (chunks.length === 0) {
+      console.error("Chunking returned 0 chunks for doc", doc._id.toString());
+      console.error("Extracted text length:", doc.extractedText?.length);
+      console.error("Pages count:", doc.pages?.length);
+      console.error("First page sample:", doc.pages?.[0]?.slice(0, 200));
       doc.embeddingStatus = "failed";
       await doc.save();
       return;
@@ -63,7 +67,10 @@ async function processEmbeddings(doc) {
     doc.embeddingStatus = "ready";
     await doc.save();
   } catch (err) {
-    console.error("Embedding pipeline failed for doc", doc._id.toString(), err.message);
+    console.error("Embedding pipeline failed for doc", doc._id.toString());
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Stack:", err.stack);
     doc.embeddingStatus = "failed";
     await doc.save();
   }
@@ -132,6 +139,55 @@ router.get("/", async (req, res) => {
     res.json({ documents: docs });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// Ask a question across ALL of the user's ready documents
+router.post("/ask-all", async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question || !question.trim()) {
+      return res.status(400).json({ message: "Question is required" });
+    }
+
+    // Only search documents that have completed embedding
+    const readyDocs = await Document.find({
+      owner: req.userId,
+      embeddingStatus: "ready",
+    }).select("_id originalName");
+
+    if (readyDocs.length === 0) {
+      return res.status(409).json({
+        message: "No documents are ready for search yet. Upload and wait for processing to complete.",
+      });
+    }
+
+    const queryEmbedding = await embedText(question);
+
+    const docRefs = readyDocs.map((d) => ({
+      id: d._id.toString(),
+      name: d.originalName,
+    }));
+
+    const topChunks = await queryChunksAcrossDocuments(docRefs, queryEmbedding);
+
+    if (topChunks.length === 0) {
+      return res.status(404).json({ message: "No relevant content found across your documents" });
+    }
+
+    const { answer, sourceChunks } = await askWithContext(question, topChunks);
+
+    res.json({
+      answer,
+      sourceChunks,
+      searchedDocuments: readyDocs.map((d) => ({
+        id: d._id,
+        name: d.originalName,
+      })),
+    });
+  } catch (err) {
+    console.error("Ask-all failed:", err.message);
+    res.status(500).json({ message: "Failed to search documents", error: err.message });
   }
 });
 
