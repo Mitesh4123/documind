@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import DocumentChat from "./pages/DocumentChat.jsx";
 import SearchAll from "./pages/SearchAll.jsx";
 import Sidebar from "./components/Sidebar.jsx";
+import useKeyboardShortcuts from "./components/useKeyboardShortcuts.js";
 
 function isAuthenticated() {
   return Boolean(localStorage.getItem("documind_token"));
@@ -13,6 +14,9 @@ function isAuthenticated() {
 
 function AppLayout({ children }) {
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
+  useKeyboardShortcuts(navigate);
 
   useEffect(() => {
     const raw = localStorage.getItem("documind_user");
@@ -47,6 +51,7 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/document/:id" element={<ProtectedRoute><DocumentChat /></ProtectedRoute>} />
       <Route path="/search" element={<ProtectedRoute><SearchAll /></ProtectedRoute>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
